@@ -189,7 +189,8 @@ class BrushGenerator(ABC):
 		bacteria_diameters = list(zip(*bacteria_data))[1]
 		bacteria_masses = list(zip(*bacteria_data))[2]
 		bacteria_counts = list(zip(*bacteria_data))[3]
-		types = random.shuffle(list(itertools.chain.from_iterable(itertools.repeat(elem, count) for elem, count in zip(bacteria_types, bacteria_counts))))
+		types = list(itertools.chain.from_iterable(itertools.repeat(elem, count) for elem, count in zip(list(bacteria_types), list(bacteria_counts))))
+		random.shuffle(types)
 		num_bacteria = len(self.coordinates_bacteria)
 		# types = rng.choice(bacteria_types, num_bacteria)
 		villi_number = self.atoms.shape[0]
@@ -340,7 +341,7 @@ class BrushGenerator(ABC):
 				f.write("Masses\n\n")
 				for k, v in self.masses.items():
 					f.write(f"{k.value} {v}\n")
-				for t, d, m in self.bacteria_data:
+				for t, d, m, _ in self.bacteria_data:
 					f.write(f"{t} {m}\n")
 				f.write("\n")
 
@@ -389,175 +390,175 @@ class BrushGenerator(ABC):
 
 
 class ArchitectureGenerator(BrushGenerator):
-    """
-    Generate a LAMMPS data file containing a XXX polymer brush grafted to a planar wall in a rectangular box.
-    Mainly based on the KremerGrestBrushGenerator class. Very demo! (not sure about the physics)
+	"""
+	Generate a LAMMPS data file containing a XXX polymer brush grafted to a planar wall in a rectangular box.
+	Mainly based on the KremerGrestBrushGenerator class. Very demo! (not sure about the physics)
 
-    Kremer, K.; Grest, G. S. Dynamics of Entangled Linear Polymer Melts: A Molecular‐dynamics Simulation. J. Chem. Phys.
-    1990, 92 (8), 5057–5086. https://doi.org/10.1063/1.458541.
-    """
+	Kremer, K.; Grest, G. S. Dynamics of Entangled Linear Polymer Melts: A Molecular‐dynamics Simulation. J. Chem. Phys.
+	1990, 92 (8), 5057–5086. https://doi.org/10.1063/1.458541.
+	"""
 
 #    AtomTypes = Enum('AtomTypes', ['graft', 'crypt-bottom', 'crypt-top', 'villus', 'bacteria'])
-    AtomTypes = Enum('AtomTypes', ['graft', 'villi', 'bacteria'])
-    BondTypes = Enum('BondTypes', ['fene'])
+	AtomTypes = Enum('AtomTypes', ['graft', 'villi', 'bacteria'])
+	BondTypes = Enum('BondTypes', ['fene'])
 
-    # in case of atom style = angle or full:
-    masses = {
-        AtomTypes['graft']  : 1,
-        AtomTypes['villi']  : 1,
-    }
+	# in case of atom style = angle or full:
+	masses = {
+		AtomTypes['graft']  : 1,
+		AtomTypes['villi']  : 1,
+	}
 
-    # in case of atom style = angle or full:
-    styles = {
-        'pair': 'lj/cut',
-        'bond': 'fene',
-    }
+	# in case of atom style = angle or full:
+	styles = {
+		'pair': 'lj/cut',
+		'bond': 'fene',
+	}
 
-    def __init__(self,
-                 box_size: tuple[tuple[float, float], tuple[float, float], Optional[tuple[float, float]]],
-                 rng_seed: Optional[int],
-                 min_dist: int,
-                 n_anchors: int,
-                 units: str,
-                 bottom_padding: float = 0,
-                 mode: str = 'sphere',
-                 ):
-        """
-        :param box_size:        3-tuple of floats describing the dimensions of the rectangular box. If the third (z)
-                                value is None, it will be automatically sized to contain the longest chain.
-        :param rng_seed:        Seed used to initialize the PRNG. May be None, in which case a random seed will be used.
-        :param min_dist:        Minimum distance between two centers of atoms: used as minimum distance for the
-							    Poisson-disk point set generator.
+	def __init__(self,
+				 box_size: tuple[tuple[float, float], tuple[float, float], Optional[tuple[float, float]]],
+				 rng_seed: Optional[int],
+				 min_dist: int,
+				 n_anchors: int,
+				 units: str,
+				 bottom_padding: float = 0,
+				 mode: str = 'sphere',
+				 ):
+		"""
+		:param box_size:        3-tuple of floats describing the dimensions of the rectangular box. If the third (z)
+								value is None, it will be automatically sized to contain the longest chain.
+		:param rng_seed:        Seed used to initialize the PRNG. May be None, in which case a random seed will be used.
+		:param min_dist:        Minimum distance between two centers of atoms: used as minimum distance for the
+								Poisson-disk point set generator.
 		:param n_anchors:       Number of grafted beads (anchors of the growed brush polymers).
 		:param bottom_padding:	Distance between the bottom edge of the box and the grafting layer. Must be positive.
-		                        Use grafted bead size value!
-        :param graft:           Generates grafted brushes when True, and non-grafted films when False
-        """
-        self.box_size = box_size
-        self.rng_seed = rng_seed
-        self.min_dist = min_dist
-        self.n_anchors = n_anchors
-        self.units = units
-        self.bottom_padding = bottom_padding
-        self.mode = mode
+								Use grafted bead size value!
+		:param graft:           Generates grafted brushes when True, and non-grafted films when False
+		"""
+		self.box_size = box_size
+		self.rng_seed = rng_seed
+		self.min_dist = min_dist
+		self.n_anchors = n_anchors
+		self.units = units
+		self.bottom_padding = bottom_padding
+		self.mode = mode
 
-        super().__init__(self.box_size, self.rng_seed, self.min_dist, self.units, self.bottom_padding, self.mode)
+		super().__init__(self.box_size, self.rng_seed, self.min_dist, self.units, self.bottom_padding, self.mode)
 
-    def _build_bead(self, mol_id: int, graft_coord: np.ndarray, bead_id: int) -> float:
+	def _build_bead(self, mol_id: int, graft_coord: np.ndarray, bead_id: int) -> float:
 
-        # four options: angle, full, sphere, hybrid
+		# four options: angle, full, sphere, hybrid
 
-        atom_type = self.AtomTypes[self.bead_type].value
+		atom_type = self.AtomTypes[self.bead_type].value
 
-        if self.mode == "sphere":
-            # self._atoms_list.append({'mol_id'   : self.current_beads + bead_id + 1,
-            self._atoms_list.append({'mol_id'   : mol_id + 1,
-                                     'atom_type': atom_type,
-                                     'diameter' : self.bead_size,
-                                     'density'  : self.density,
-                                     'x'        : graft_coord[0],
-                                     'y'        : graft_coord[1],
-                                     'z'        : self.current_height + float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2))
-                                     })  # float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2))
-            # print(atom_type, self.current_beads, bead_id, self.bead_size, self.current_height + float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2)))
-        elif self.mode == "hybrid":
-            # self._atoms_list.append({'mol_id'   : self.current_beads + bead_id + 1,
-            self._atoms_list.append({'atom_type': atom_type,
-                                     'x'        : graft_coord[0],
-                                     'y'        : graft_coord[1],
-                                     'z'        : self.current_height + float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2)),
-                                     'mol_id'   : mol_id + 1,
-                                     'diameter' : self.bead_size,
-                                     'density'  : self.density,
-                                     })  # float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2))
-            # print(atom_type, self.current_beads, bead_id, self.bead_size, self.current_height + float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2)))
-        elif self.mode == "full":
-            # self._atoms_list.append({'mol_id'   : self.current_beads + bead_id + 1,
-            self._atoms_list.append({'mol_id'   : mol_id + 1,
-                                     'atom_type': atom_type,
-                                     'q'  : 0,
-                                     'x'        : graft_coord[0],
-                                     'y'        : graft_coord[1],
-                                     'z'        : self.current_height + float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2))
-                                     })  # float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2))
-            # print(atom_type, self.current_beads, bead_id, self.bead_size, self.current_height + float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2)))
-        elif self.mode == "angle":
-            # self._atoms_list.append({'mol_id'   : self.current_beads + bead_id + 1,
-            self._atoms_list.append({'mol_id'   : mol_id + 1,
-                                     'atom_type': atom_type,
-                                     'x'        : graft_coord[0],
-                                     'y'        : graft_coord[1],
-                                     'z'        : self.current_height + float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2))
-                                     })  # float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2))
-            # print(atom_type, self.current_beads, bead_id, self.bead_size, self.current_height + float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2)))
+		if self.mode == "sphere":
+			# self._atoms_list.append({'mol_id'   : self.current_beads + bead_id + 1,
+			self._atoms_list.append({'mol_id'   : mol_id + 1,
+									 'atom_type': atom_type,
+									 'diameter' : self.bead_size,
+									 'density'  : self.density,
+									 'x'        : graft_coord[0],
+									 'y'        : graft_coord[1],
+									 'z'        : self.current_height + float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2))
+									 })  # float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2))
+			# print(atom_type, self.current_beads, bead_id, self.bead_size, self.current_height + float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2)))
+		elif self.mode == "hybrid":
+			# self._atoms_list.append({'mol_id'   : self.current_beads + bead_id + 1,
+			self._atoms_list.append({'atom_type': atom_type,
+									 'x'        : graft_coord[0],
+									 'y'        : graft_coord[1],
+									 'z'        : self.current_height + float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2)),
+									 'mol_id'   : mol_id + 1,
+									 'diameter' : self.bead_size,
+									 'density'  : self.density,
+									 })  # float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2))
+			# print(atom_type, self.current_beads, bead_id, self.bead_size, self.current_height + float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2)))
+		elif self.mode == "full":
+			# self._atoms_list.append({'mol_id'   : self.current_beads + bead_id + 1,
+			self._atoms_list.append({'mol_id'   : mol_id + 1,
+									 'atom_type': atom_type,
+									 'q'  : 0,
+									 'x'        : graft_coord[0],
+									 'y'        : graft_coord[1],
+									 'z'        : self.current_height + float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2))
+									 })  # float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2))
+			# print(atom_type, self.current_beads, bead_id, self.bead_size, self.current_height + float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2)))
+		elif self.mode == "angle":
+			# self._atoms_list.append({'mol_id'   : self.current_beads + bead_id + 1,
+			self._atoms_list.append({'mol_id'   : mol_id + 1,
+									 'atom_type': atom_type,
+									 'x'        : graft_coord[0],
+									 'y'        : graft_coord[1],
+									 'z'        : self.current_height + float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2))
+									 })  # float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2))
+			# print(atom_type, self.current_beads, bead_id, self.bead_size, self.current_height + float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2)))
 
-        # Molecular topology
-        # Bonds and Angles
+		# Molecular topology
+		# Bonds and Angles
 
-        if self.current_beads == 0 and bead_id == 0:
-            pass
-        elif self.current_beads != 0 and bead_id == 0:
-            atom_id = len(self._atoms_list)
-            self._bonds_list.append({'bond_type': self.BondTypes[self.bond_style].value,
-                                     'atom1'    : atom_id - self.n_anchors - self.beads_counter + (self.prev_layer_n_beads - 1) * (self.multiplier + 1),
-                                     'atom2'    : atom_id
-                                     })
-            self.multiplier += 1
+		if self.current_beads == 0 and bead_id == 0:
+			pass
+		elif self.current_beads != 0 and bead_id == 0:
+			atom_id = len(self._atoms_list)
+			self._bonds_list.append({'bond_type': self.BondTypes[self.bond_style].value,
+									 'atom1'    : atom_id - self.n_anchors - self.beads_counter + (self.prev_layer_n_beads - 1) * (self.multiplier + 1),
+									 'atom2'    : atom_id
+									 })
+			self.multiplier += 1
 
-        elif self.current_beads != 0 and bead_id != 0:
-            self.beads_counter += 1
-            atom_id = len(self._atoms_list)
-            self._bonds_list.append({'bond_type': self.BondTypes[self.bond_style].value,
-                                     'atom1'    : atom_id - 1,
-                                     'atom2'    : atom_id
-                                     })
+		elif self.current_beads != 0 and bead_id != 0:
+			self.beads_counter += 1
+			atom_id = len(self._atoms_list)
+			self._bonds_list.append({'bond_type': self.BondTypes[self.bond_style].value,
+									 'atom1'    : atom_id - 1,
+									 'atom2'    : atom_id
+									 })
 
-        return self.current_height + float((bead_id + 1) * (self.bead_size - self.spacing * self.bead_size / 2))
+		return self.current_height + float((bead_id + 1) * (self.bead_size - self.spacing * self.bead_size / 2))
 
-    def _build_bacterium(self, mol_id: int, graft_coord: np.ndarray) -> None:
+	def _build_bacterium(self, mol_id: int, graft_coord: np.ndarray) -> None:
 
-        # four options: angle, full, sphere, hybrid
+		# four options: angle, full, sphere, hybrid
 
-        atom_type = self.AtomTypes[self.bead_type].value
+		atom_type = self.AtomTypes[self.bead_type].value
 
-        if self.mode == "sphere":
-            # self._atoms_list.append({'mol_id'   : self.current_beads + bead_id + 1,
-            self._atoms_list.append({'mol_id'   : mol_id + 1,
-                                     'atom_type': atom_type,
-                                     'diameter' : self.bead_size,
-                                     'density'  : self.density,
-                                     'x'        : graft_coord[0],
-                                     'y'        : graft_coord[1],
-                                     'z'        : graft_coord[2]
-                                     })  # float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2))
-            # print(atom_type, self.current_beads, bead_id, self.bead_size, self.current_height + float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2)))
-        elif self.mode == "hybrid":
-            # self._atoms_list.append({'mol_id'   : self.current_beads + bead_id + 1,
-            self._atoms_list.append({'atom_type': atom_type,
-                                     'x'        : graft_coord[0],
-                                     'y'        : graft_coord[1],
-                                     'z'        : graft_coord[2],
-                                     'mol_id'   : mol_id + 1,
-                                     'diameter' : self.bead_size,
-                                     'density'  : self.density,
-                                     })  # float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2))
-            # print(atom_type, self.current_beads, bead_id, self.bead_size, self.current_height + float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2)))
-        elif self.mode == "full":
-            # self._atoms_list.append({'mol_id'   : self.current_beads + bead_id + 1,
-            self._atoms_list.append({'mol_id'   : mol_id + 1,
-                                     'atom_type': atom_type,
-                                     'q'  : 0,
-                                     'x'        : graft_coord[0],
-                                     'y'        : graft_coord[1],
-                                     'z'        : graft_coord[2]
-                                     })  # float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2))
-            # print(atom_type, self.current_beads, bead_id, self.bead_size, self.current_height + float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2)))
-        elif self.mode == "angle":
-            # self._atoms_list.append({'mol_id'   : self.current_beads + bead_id + 1,
-            self._atoms_list.append({'mol_id'   : mol_id + 1,
-                                     'atom_type': atom_type,
-                                     'x'        : graft_coord[0],
-                                     'y'        : graft_coord[1],
-                                     'z'        : graft_coord[2]
-                                     })  # float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2))
-            # print(atom_type, self.current_beads, bead_id, self.bead_size, self.current_height + float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2)))
+		if self.mode == "sphere":
+			# self._atoms_list.append({'mol_id'   : self.current_beads + bead_id + 1,
+			self._atoms_list.append({'mol_id'   : mol_id + 1,
+									 'atom_type': atom_type,
+									 'diameter' : self.bead_size,
+									 'density'  : self.density,
+									 'x'        : graft_coord[0],
+									 'y'        : graft_coord[1],
+									 'z'        : graft_coord[2]
+									 })  # float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2))
+			# print(atom_type, self.current_beads, bead_id, self.bead_size, self.current_height + float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2)))
+		elif self.mode == "hybrid":
+			# self._atoms_list.append({'mol_id'   : self.current_beads + bead_id + 1,
+			self._atoms_list.append({'atom_type': atom_type,
+									 'x'        : graft_coord[0],
+									 'y'        : graft_coord[1],
+									 'z'        : graft_coord[2],
+									 'mol_id'   : mol_id + 1,
+									 'diameter' : self.bead_size,
+									 'density'  : self.density,
+									 })  # float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2))
+			# print(atom_type, self.current_beads, bead_id, self.bead_size, self.current_height + float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2)))
+		elif self.mode == "full":
+			# self._atoms_list.append({'mol_id'   : self.current_beads + bead_id + 1,
+			self._atoms_list.append({'mol_id'   : mol_id + 1,
+									 'atom_type': atom_type,
+									 'q'  : 0,
+									 'x'        : graft_coord[0],
+									 'y'        : graft_coord[1],
+									 'z'        : graft_coord[2]
+									 })  # float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2))
+			# print(atom_type, self.current_beads, bead_id, self.bead_size, self.current_height + float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2)))
+		elif self.mode == "angle":
+			# self._atoms_list.append({'mol_id'   : self.current_beads + bead_id + 1,
+			self._atoms_list.append({'mol_id'   : mol_id + 1,
+									 'atom_type': atom_type,
+									 'x'        : graft_coord[0],
+									 'y'        : graft_coord[1],
+									 'z'        : graft_coord[2]
+									 })  # float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2))
+			# print(atom_type, self.current_beads, bead_id, self.bead_size, self.current_height + float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2)))
