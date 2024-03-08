@@ -6,6 +6,9 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
+import random
+import itertools
+
 from glampy.sampler import PoissonDiskSampler
 from glampy.utils import compute_density
 
@@ -181,12 +184,14 @@ class BrushGenerator(ABC):
 		return z_max
 
 	def _build_bacteria(self, bacteria_data, bacteria_data_dict) -> None:
-		rng = np.random.RandomState(seed=self.rng_seed)
+		# rng = np.random.RandomState(seed=self.rng_seed)
 		bacteria_types = list(zip(*bacteria_data))[0]
 		bacteria_diameters = list(zip(*bacteria_data))[1]
 		bacteria_masses = list(zip(*bacteria_data))[2]
+		bacteria_counts = list(zip(*bacteria_data))[3]
+		types = random.shuffle(list(itertools.chain.from_iterable(itertools.repeat(elem, count) for elem, count in zip(bacteria_types, bacteria_counts))))
 		num_bacteria = len(self.coordinates_bacteria)
-		types = rng.choice(bacteria_types, num_bacteria)
+		# types = rng.choice(bacteria_types, num_bacteria)
 		villi_number = self.atoms.shape[0]
 		atom_ids = list(map(lambda x: [x], list(range(villi_number, villi_number + len(types)))))
 		bac_info_1 = list(map(lambda x: [x], types))
@@ -212,8 +217,8 @@ class BrushGenerator(ABC):
 			  chain_height: float = 1750,
 			  bond_style: str = "fene",
 			  pair_style: str = "lj/cut",
-			  bacteria_data: list = [(3, 0.04, 0.000064), (4, 0.08, 0.000512), (5, 0.12, 0.001728)],
-			  bacteria_data_dict: dict = {3: [0.04, 0.000064], 4: [0.08, 0.000512], 5: [0.12, 0.001728]}
+			  bacteria_data: list = [(3, 0.04, 0.000064, 1000), (4, 0.08, 0.000512, 100), (5, 0.12, 0.001728, 10)],
+			  bacteria_data_dict: dict = {3: [0.04, 0.000064, 1000], 4: [0.08, 0.000512, 100], 5: [0.12, 0.001728, 10]}
 			  ) -> None:
 		"""
 		Create atom positions and molecular topology for a randomly-grafted monodisperse AdG-brush.
