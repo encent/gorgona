@@ -371,7 +371,7 @@ class BrushGenerator(ABC):
 
 			# Atom properties
 			f.write("Atoms # full\n\n")
-			self.atoms.to_csv(f, sep=' ', header=False, index=True, line_terminator='\n', float_format='%.3g')
+			self.atoms.to_csv(f, sep=' ', header=False, index=True, line_terminator='\n', float_format='%.6g')
 			f.write("\n")
 
 			# Molecular topology
