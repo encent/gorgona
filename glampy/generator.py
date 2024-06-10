@@ -1,13 +1,17 @@
 import gzip
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Optional
+from typing import Optional, Tuple
 
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 import random
 import itertools
+
+from os import makedirs
+from os.path import isdir
 
 from glampy.sampler import PoissonDiskSampler
 from glampy.utils import compute_density
@@ -296,7 +300,7 @@ class BrushGenerator(ABC):
 			self.angles.index += 1
 			self.dihedrals.index += 1
 
-	def write(self, filename: str) -> None:
+	def write(self, filename: str, generation_type: str) -> None:
 		"""
 		Write the LAMMPS data file.
 		:param filename: Filename for the output file.
@@ -331,7 +335,10 @@ class BrushGenerator(ABC):
 			# Box geometry
 			f.write(f"{min(self.box_size[0][0], self.bac_box_size[0][0])} {max(self.box_size[0][1], self.bac_box_size[0][1])} xlo xhi\n")
 			f.write(f"{min(self.box_size[1][0], self.bac_box_size[1][0])} {max(self.box_size[1][1], self.bac_box_size[1][1])} ylo yhi\n")
-			f.write(f"-{self.bottom_padding} {max(self.box_size[2][1], self.bac_box_size[2][1])} zlo zhi\n\n")
+			if generation_type == "both":
+				f.write(f"{self.bottom_padding} {max(self.box_size[2][1], self.bac_box_size[2][1]) + 0.5} zlo zhi\n\n")
+			else:
+				f.write(f"{self.bottom_padding} {max(self.box_size[2][1], self.bac_box_size[2][1])} zlo zhi\n\n")
 
 			if self.mode != "sphere":
 				if self.units == "micro" or self.units == "lj":
@@ -339,8 +346,9 @@ class BrushGenerator(ABC):
 						self.masses[k] = self.bead_mass
 				# Force field coeffs
 				f.write("Masses\n\n")
-				for k, v in self.masses.items():
-					f.write(f"{k.value} {v}\n")
+				if generation_type == "both" or generation_type == "villi":
+					for k, v in self.masses.items():
+						f.write(f"{k.value} {v}\n")
 				for t, d, m, _ in self.bacteria_data:
 					f.write(f"{t} {m}\n")
 				f.write("\n")
@@ -562,3 +570,171 @@ class ArchitectureGenerator(BrushGenerator):
 									 'z'        : graft_coord[2]
 									 })  # float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2))
 			# print(atom_type, self.current_beads, bead_id, self.bead_size, self.current_height + float(bead_id * (self.bead_size - self.spacing * self.bead_size / 2)))
+
+
+# Class to generate bacteria amount per type
+class BacteriaAmountGenerator():
+	# create defaul __init__ method
+	def __init__(self, 
+			  input_file_path: str = "../data/input_data/average_day7.txt",
+			  threshold_on_bacteria_amount: float = 10.0):
+		self.threshold_on_bacteria_amount = threshold_on_bacteria_amount
+		num_bac_genomes = pd.read_csv(input_file_path, sep=" ")
+		num_bac_genomes = num_bac_genomes[num_bac_genomes['count'] > threshold_on_bacteria_amount]
+		num_bac_genomes.reset_index(drop=True, inplace=True)
+		self.num_bac_genomes = num_bac_genomes
+		
+	def generate_bacteria_amount(self, 
+								 output_dir_path: str = "../data/01_bacteria_amount/", 
+								 multiplier_on_bacteria_amount: int = 21):
+		self.num_bac_genomes['count'] = [round(x) for x in self.num_bac_genomes['count'] * multiplier_on_bacteria_amount]
+		total_num_bac = self.num_bac_genomes['count'].sum()
+		if not isdir(output_dir_path):
+			makedirs(output_dir_path)
+		self.num_bac_genomes.to_csv(f"{output_dir_path}/bac_amount_{total_num_bac}_mult_{multiplier_on_bacteria_amount}_thresh_{self.threshold_on_bacteria_amount}.tsv", sep='\t', index=None)
+		return self.num_bac_genomes.copy()
+
+# Class to generate initial coordinates of bacteria and/or villi
+
+class BacteriaVilliCoordinatesGenerator():
+	# create defaul __init__ method
+	def __init__(self, 
+			  input_file_path: str = "../data/01_bacteria_amount/bac_amount_518967_mult_435.2017151420611_thresh_10.tsv",
+			  generation_type: str = "bacteria", 
+			  mode: str = "hybrid", 
+			  units: str = "lj", 
+			  seed: int = 42, 
+			  spacing: float = 1.5, 
+			  xlim: Tuple[float, float] = (0, 10), 
+			  ylim: Tuple[float, float] = (0, 10), 
+			  zlim_villi: Tuple[float, float] = (0, 10), 
+			  zlim_bacteria: Tuple[float, float] = (0, 10), 
+			  villus_height: int = 40, 
+			  villus_width: int = 4, 
+			  min_intervillus_width: float = 1.5, 
+			  graft_size: int = 4, 
+			  crypt_bottom_height: int = 4, 
+			  crypt_bottom_width: int = 4, 
+			  crypt_top_height: int = 4, 
+			  crypt_top_width: int = 4, 
+			  graft_mass: int = 1000, 
+			  crypt_bottom_mass: int = 1000, 
+			  crypt_top_mass: int = 1000, 
+			  villus_mass: int = 1000, 
+			  n_anchors: int = 42, 
+			  bottom_padding: int = -1, 
+			  bsize: float = 0.04, 
+			  bmass: float = 0.000064):
+		# generation_type: 'bacteria' or 'villi' (TBD) or 'both'
+		# mode: 'sphere' or 'hybrid' or 'full' or 'angle'
+		# units: 'lj' or 'micro'
+		# bsize: 0.04 or 0.12
+		# bmass: 0.000064 or 0.001728
+
+		self.input_file_path = input_file_path
+		self.generation_type = generation_type
+		if self.generation_type == 'both':
+			self.num_shift = 3
+		elif self.generation_type == 'bacteria':
+			self.num_shift = 1
+		self.mode = mode
+		self.units = units
+		self.seed = seed
+		self.spacing = spacing
+		self.xlim = xlim
+		self.ylim = ylim
+		self.zlim_bacteria = zlim_bacteria
+		self.zlim_villi = zlim_villi
+		self.box_size = (xlim, ylim, zlim_villi)
+		self.bacteria_box_size = (xlim, ylim, zlim_bacteria)
+
+		##### illeum or caecum:
+		self.villus_height = villus_height
+		self.villus_width = villus_width
+		self.min_intervillus_width = min_intervillus_width
+		self.graft_size = graft_size
+		self.crypt_bottom_height = crypt_bottom_height
+		self.crypt_bottow_width = crypt_bottom_width
+		self.crypt_top_height = crypt_top_height
+		self.crypt_top_width = crypt_top_width
+		self.min_dist = graft_size + min_intervillus_width
+		##### end of illeum or caecum
+
+		self.graft_mass = graft_mass
+		self.crypt_bottom_mass = crypt_bottom_mass
+		self.crypt_top_mass = crypt_top_mass
+		self.villus_mass = villus_mass
+		self.n_anchors = n_anchors
+		self.bottom_padding = bottom_padding
+
+		# bacteria data
+		bacteria_data_file = pd.read_csv(input_file_path, sep="\t")
+		for i in range(bacteria_data_file.shape[0]):
+			bacteria_data_file.loc[i, 'genome'] = i + self.num_shift
+		self.bacteria_data_file = bacteria_data_file.copy()
+		self.n_bacteria = bacteria_data_file['count'].sum()
+		self.bsize = bsize
+		self.bmass = bmass
+		self.bacteria_data = [(idx, bsize, bmass, bcnt) for idx, bcnt in zip(bacteria_data_file['genome'], bacteria_data_file['count'])]
+		self.bacteria_data_dict = dict(zip(list(bacteria_data_file['genome']), [row1 + [row2] for row1, row2 in zip([[bsize, bmass]] * bacteria_data_file.shape[0], list(bacteria_data_file['count']))]))
+		self.min_bac_dist = bsize * 1.5
+		
+	def generate_coordinates(self, 
+						  output_dir_path: str = "../data/02_coordinates/", 
+						  plot_figs: bool = False):
+		archgen = ArchitectureGenerator(self.box_size, self.seed, self.min_dist, self.n_anchors, self.units, bottom_padding=self.bottom_padding, mode=self.mode)
+		
+		# generate villi coordinates
+		if self.generation_type == 'both':
+			n_actual = archgen.generate_grafting_layer(self.n_anchors, 10**6)
+			if n_actual != self.n_anchors:
+				print(f'Warning: Grafting layer too dense. {n_actual} grafting points instead of {self.n_anchors}.')
+			else:
+				print(f'{n_actual} points')
+			if plot_figs:
+				fig = plt.figure(figsize=(7,7))
+				plt.scatter(archgen.coordinates[:, 0], archgen.coordinates[:, 1])
+				plt.show()
+			
+			# Construct grafting beads (fixed layer)
+			archgen.build(spacing=self.spacing,
+							bead_type="graft",
+							bead_size=self.graft_size,
+							bead_mass=self.graft_mass,
+							chain_height=self.graft_size,
+							bond_style="fene",
+							pair_style="lj/cut")
+
+			# Construct villi beads (moving layer)
+			archgen.build(spacing=self.spacing,
+							bead_type="villi",
+							bead_size=self.villus_width,
+							bead_mass=self.villus_mass,
+							chain_height=self.villus_height,
+							bond_style="fene",
+							pair_style="lj/cut")
+			
+		# generate bacteria coordinates
+		n_bacteria_actual = archgen.generate_bacteria(self.n_bacteria, self.min_bac_dist, self.bacteria_box_size)
+		print(self.n_bacteria, n_bacteria_actual)
+		if plot_figs:
+			fig = plt.figure(figsize=(7,7))
+			ax = fig.add_subplot(projection='3d') 
+			ax.scatter(archgen.coordinates_bacteria[:, 0], archgen.coordinates_bacteria[:, 1], archgen.coordinates_bacteria[:, 2], s=self.min_bac_dist)
+			plt.show()
+		archgen.build(spacing=self.spacing,
+						bead_type="bacteria",
+						bead_size=self.villus_width,
+						bead_mass=self.villus_mass,
+						chain_height=self.villus_height,
+						bond_style="fene",
+						pair_style="lj/cut", 
+						bacteria_data=self.bacteria_data, 
+						bacteria_data_dict=self.bacteria_data_dict)
+		# print(archgen.atoms.atom_type.value_counts())
+
+		# write to file
+		if not isdir(output_dir_path):
+			makedirs(output_dir_path)
+		fid = f"{self.generation_type}_zlimbac_{self.zlim_bacteria[0]}_{self.zlim_bacteria[1]}_numbac_{n_bacteria_actual}_bacsize_{self.bsize}_bmass_{self.bmass}"
+		archgen.write(f"{output_dir_path}/{fid}.pos", generation_type=self.generation_type)
