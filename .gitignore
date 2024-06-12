@@ -1,4 +1,6 @@
 .vscode
+data/02_coordinates
+data/03_run_experiments_12-06-24
 glampy.egg-info
 glampy/__pycache__/generator.cpython-39.pyc
 glampy/__pycache__/sampler.cpython-39.pyc

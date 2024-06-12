@@ -1,4 +1,5 @@
 import gzip
+import shutil
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Optional, Tuple
@@ -738,3 +739,413 @@ class BacteriaVilliCoordinatesGenerator():
 			makedirs(output_dir_path)
 		fid = f"{self.generation_type}_zlimbac_{self.zlim_bacteria[0]}_{self.zlim_bacteria[1]}_numbac_{n_bacteria_actual}_bacsize_{self.bsize}_bmass_{self.bmass}"
 		archgen.write(f"{output_dir_path}/{fid}.pos", generation_type=self.generation_type)
+
+# Class to generate lammps run file
+class LammpsRunFileGenerator():
+	# create defaul __init__ method
+	def __init__(self, 
+			  input_bac_amount_file_path: str = "../data/01_bacteria_amount/bac_amount_518967_mult_435.2017151420611_thresh_10.tsv",
+			  input_func_distances_file_path: str = "../data/input_files/genome_functional.distances.txt",
+			  output_matrices_dir_path: str = "../data/03_matrices",
+			  random_mean: float = 0.2,
+			  random_std: float = 0.04,
+			  plot_figs: bool = False,
+			  ):
+		""""
+		:param random_mean: has to be selected based on the distribution of the observed (GT) coefficients
+		:param random_std: has to be selected based on the distribution of the observed (GT) coefficients
+		"""
+
+		# Read input files
+		num_bac_genomes = pd.read_csv(input_bac_amount_file_path, sep='\t')
+		genome_distance_matrix = pd.read_csv(input_func_distances_file_path, sep=" ")
+		genome_distance_matrix_selected = genome_distance_matrix.loc[list(num_bac_genomes['genome']), list(num_bac_genomes['genome'])]
+		self.genome_distance_matrix_selected = genome_distance_matrix_selected.copy()
+		# Save matrices to further display them as heatmaps
+		if not isdir(output_matrices_dir_path):
+			makedirs(output_matrices_dir_path)
+		
+		##### Observed coefficients
+		genome_distance_matrix_selected.to_csv(f"{output_matrices_dir_path}/MATRIX_b_gt.tsv", sep='\t')
+		genome_distance_matrix_selected.to_csv(f"{output_matrices_dir_path}/MATRIX_v_b_gt.tsv", sep='\t')
+
+		upper_triangle_mask = np.triu(np.ones(genome_distance_matrix.shape), k=1).astype(bool)
+		result = genome_distance_matrix.where(upper_triangle_mask).stack()
+		result_df = result.reset_index()
+		result_df.columns = ['Row', 'Column', 'Value']
+		if plot_figs:
+			## Distribution of distances for initial genomes quantity (174)
+			result_df['Value'].hist(bins=50)
+			plt.xlabel('Similarity')
+			plt.title(f'Distribution of similarities for {genome_distance_matrix.shape[0]} bacterial genomes')
+			plt.show()
+			print(f"Median: {result_df['Value'].median()}")
+			print(f"Max: {(1 / result_df['Value']).max()}")
+
+		upper_triangle_mask = np.triu(np.ones(genome_distance_matrix_selected.shape), k=1).astype(bool)
+		result = genome_distance_matrix_selected.where(upper_triangle_mask).stack()
+		result_df = result.reset_index()
+		result_df.columns = ['Row', 'Column', 'Value']
+		self.result_df = result_df.copy()
+		if plot_figs:
+			## Distribution of distances for selected genomes quantity (48)
+			result_df['Value'].hist(bins=50)
+			plt.xlabel('Similarity')
+			plt.title(f'Distribution of GT similarities for {genome_distance_matrix_selected.shape[0]} bacterial genomes')
+			plt.show()
+			print(f"Median: {result_df['Value'].median()}")
+			print(f"Max: {(1 / result_df['Value']).max()}")
+		#####
+
+		##### Random coefficients
+		random_sample = np.random.normal(random_mean, random_std, len(result_df['Value']))
+
+		if plot_figs:
+			plt.hist(random_sample, bins=50)
+			plt.xlabel('Similarity')
+			plt.xlim((0.05, 0.55))
+			plt.title('Distribution of RND similarities for 34 bacterial genomes')
+			plt.show()
+			print(f"Median: {np.median(random_sample)}")
+			print(f"Max: {np.max(1 / random_sample)}")
+
+		genome_distance_matrix_random = genome_distance_matrix_selected.copy()
+
+		lower_triangle_indices = np.tril_indices(34, -1)
+		genome_distance_matrix_random.values[lower_triangle_indices] = random_sample
+
+		# Mirror the values to the upper triangle
+		genome_distance_matrix_random.values.T[lower_triangle_indices] = random_sample
+
+		# Save matrices to further display them as heatmaps
+		genome_distance_matrix_random.to_csv(f"{output_matrices_dir_path}/MATRIX_b_rnd_true.tsv", sep='\t')
+		genome_distance_matrix_random.to_csv(f"{output_matrices_dir_path}/MATRIX_v_b_rnd_true.tsv", sep='\t')
+
+		rnd_upper_triangle_mask = np.triu(np.ones(genome_distance_matrix_random.shape), k=1).astype(bool)
+		result_random = genome_distance_matrix_random.where(rnd_upper_triangle_mask).stack()
+		result_random_df = result_random.reset_index()
+		result_random_df.columns = ['Row', 'Column', 'Value']
+		self.result_random_df = result_random_df.copy()
+		#####
+
+		##### Re-shuffle coefficients (same as GT but re-shuffled)
+		upper_triangle_mask = np.triu(np.ones(genome_distance_matrix_selected.shape), k=1).astype(bool)
+		_result = genome_distance_matrix_selected.where(upper_triangle_mask).stack()
+		_result_df = _result.reset_index()
+		_result_df.columns = ['Row', 'Column', 'Value']
+		reshuffled_sample = np.asarray(_result_df['Value'])
+
+		np.random.shuffle(reshuffled_sample)
+
+		if plot_figs:
+			plt.hist(reshuffled_sample, bins=50)
+			plt.xlabel('Similarity')
+			plt.xlim((0.05, 0.55))
+			plt.title('Distribution of RSHFL similarities for 34 bacterial genomes')
+			plt.plot()
+
+		genome_distance_matrix_reshuffled = genome_distance_matrix_selected.copy()
+
+		lower_triangle_indices = np.tril_indices(34, -1)
+		genome_distance_matrix_reshuffled.values[lower_triangle_indices] = reshuffled_sample
+
+		# Mirror the values to the upper triangle
+		genome_distance_matrix_reshuffled.values.T[lower_triangle_indices] = reshuffled_sample
+
+		# Save matrices to further display them as heatmaps
+		genome_distance_matrix_reshuffled.to_csv(f"{output_matrices_dir_path}/MATRIX_b_reshuffled.tsv", sep='\t')
+		genome_distance_matrix_reshuffled.to_csv(f"{output_matrices_dir_path}/MATRIX_v_b_reshuffled.tsv", sep='\t')
+
+		rnd_upper_triangle_mask = np.triu(np.ones(genome_distance_matrix_reshuffled.shape), k=1).astype(bool)
+		result_reshuffled = genome_distance_matrix_reshuffled.where(rnd_upper_triangle_mask).stack()
+		result_reshuffled_df = result_reshuffled.reset_index()
+		result_reshuffled_df.columns = ['Row', 'Column', 'Value']
+		self.result_reshuffled_df = result_reshuffled_df.copy()
+		#####
+
+	def generate_pair_coefficients(self, 
+					  output_dir_path: str = "../data/03_pair_coefficients/",
+					  generation_type: str = "bacteria",
+					  scaling_factor: int = 10e5, 
+					  ):
+		self.coefficients_path = output_dir_path
+		self.scaling_factor = scaling_factor
+		if generation_type == 'both':
+			self.num_shift = 3
+		elif generation_type == 'bacteria':
+			self.num_shift = 1
+
+		result_df_write = self.result_df.copy()
+		result_random_df_write = self.result_random_df.copy()
+		result_reshuffled_df_write = self.result_reshuffled_df.copy()
+
+		particle_types = dict(zip(list(self.genome_distance_matrix_selected.index), list(range(self.num_shift, self.genome_distance_matrix_selected.shape[0] + self.num_shift))))
+
+		result_df_write['Row'] = list(map(lambda x: particle_types[x], result_df_write['Row']))
+		result_df_write['Column'] = list(map(lambda x: particle_types[x], result_df_write['Column']))
+		result_df_write['Value'] = list(map(lambda x: format(1 / x / self.scaling_factor, '.15f'), result_df_write['Value']))
+		# 10e5
+
+		result_random_df_write['Row'] = list(map(lambda x: particle_types[x], result_random_df_write['Row']))
+		result_random_df_write['Column'] = list(map(lambda x: particle_types[x], result_random_df_write['Column']))
+		result_random_df_write['Value'] = list(map(lambda x: format(1 / x / self.scaling_factor, '.15f'), result_random_df_write['Value']))
+		# 10e5
+
+		result_reshuffled_df_write['Row'] = list(map(lambda x: particle_types[x], result_reshuffled_df_write['Row']))
+		result_reshuffled_df_write['Column'] = list(map(lambda x: particle_types[x], result_reshuffled_df_write['Column']))
+		result_reshuffled_df_write['Value'] = list(map(lambda x: format(1 / x / self.scaling_factor, '.15f'), result_reshuffled_df_write['Value']))
+		# 10e5
+
+		self.result_df_write = result_df_write.copy()
+		self.result_random_df_write = result_random_df_write.copy()
+		self.result_reshuffled_df_write = result_reshuffled_df_write.copy()
+
+		if not isdir(output_dir_path):
+			makedirs(output_dir_path)
+		
+		# Write pair coefficients
+		bacteria_size = "${bac_size}" # At the moment all bacteria have the same size and mass
+		identical_limit = "${diff_bac_cf}" # distance limit for identical particles
+
+		fname = 'PAIR_COEFS_b_gt.txt' if self.num_shift == 1 else 'PAIR_COEFS_v_b_gt.txt'
+		with open(f"{output_dir_path}/{fname}", 'w') as f:
+			for i, row in result_df_write.iterrows():
+				f.write(f"pair_coeff {row['Row']} {row['Column']}\t{row['Value']}\t{bacteria_size}\t{identical_limit}\n")
+
+		fname = 'PAIR_COEFS_b_rnd.txt' if self.num_shift == 1 else 'PAIR_COEFS_v_b_rnd.txt'
+		with open(f"{output_dir_path}/{fname}", 'w') as f:
+			for i, row in result_random_df_write.iterrows():
+				f.write(f"pair_coeff {row['Row']} {row['Column']}\t{row['Value']}\t{bacteria_size}\t{identical_limit}\n")
+
+		fname = 'PAIR_COEFS_b_reshuffled.txt' if self.num_shift == 1 else 'PAIR_COEFS_v_b_reshuffled.txt'
+		with open(f"{output_dir_path}/{fname}", 'w') as f:
+			for i, row in result_reshuffled_df_write.iterrows():
+				f.write(f"pair_coeff {row['Row']} {row['Column']}\t{row['Value']}\t{bacteria_size}\t{identical_limit}\n")
+		
+	def generate_run_files(self, 
+					  coordinates_path: str = "../data/02_coordinates/bacteria_zlimbac_0_10_numbac_25002_bacsize_0.12_bmass_0.001728.pos",
+					  output_dir_path: str = "../data/03_run_experiments/",
+					  generation_type: str = "bacteria",
+					  coefficients_type: str = "gt",
+					  processing_units: Tuple[int, int, int] = (10, 10, 1),
+					  ):
+		""""
+		:param coefficients_type: 'gt' or 'rnd' or 'reshuffled'
+		"""
+		self.coordinates_path = coordinates_path
+		self.experiments_path = output_dir_path
+		if not isdir(self.experiments_path):
+			makedirs(self.experiments_path)
+		if not isdir(f"{self.experiments_path}/{generation_type}_{coefficients_type}"):
+			makedirs(f"{self.experiments_path}/{generation_type}_{coefficients_type}")
+		shutil.copy(self.coordinates_path, f"{self.experiments_path}/{generation_type}_{coefficients_type}/coordinates.pos")
+		
+		if generation_type == 'bacteria':
+			self.fid_gen_type = "b"
+		elif generation_type == 'both':
+			self.fid_gen_type = "v_b"
+		with open(f"{self.coefficients_path}/PAIR_COEFS_{self.fid_gen_type}_{coefficients_type}.txt", 'r') as f:
+			pair_coeffs = f.read()
+		
+		with open(f"{self.experiments_path}/{generation_type}_{coefficients_type}/run.in", 'w') as f:
+			f.write("units\tlj\n")
+			f.write("atom_style\thybrid angle bpm/sphere 0\n")
+			if generation_type == 'bacteria':
+				f.write("boundary\tp p p\n")
+			elif generation_type == 'both':
+				f.write("boundary\tp p f\n")
+			f.write(f"processors\t{processing_units[0]} {processing_units[1]} {processing_units[2]}\n")
+			f.write("\n### Force field ###\n")
+			f.write("pair_style\tlj/cut ${global_cf}\n")
+			f.write("pair_modify\tshift yes\n")
+			if generation_type == 'both':
+				f.write("bond_style\tfene\n")
+				f.write("special_bonds\tfene\n")
+			f.write("\nread_data\tcoordinates.pos\n")
+			if generation_type == 'both':
+				f.write("angle_style\tcosine\n")
+				f.write("angle_coeff\t1 75.0\n")
+				f.write("\n# Bond coefficients (villi)\n")
+				f.write("#\tK\tR0\te\ts\n")
+				f.write("bond_coeff\t1 30.0 1.5 1.0 1.0\n")
+				f.write("\n# Villi pair coefficients\n")
+				f.write("#\te\ts\tcutoff\n")
+				f.write("pair_coeff 1*2 1*2\t0.6\t1.0\t2.5 # s: 100 vs. 25\n")
+				f.write(f"pair_coeff 1*2 3*{self.genome_distance_matrix_selected.shape[0] + 2}" + "\t${vil_bac_coef}\t${vil_bac_size}\t${vil_bac_cf} # 0.01 force\n")
+			f.write("\n# Bacteria pair coefficients\n")
+			f.write("#\te\ts\tcutoff\n")
+			if generation_type == 'bacteria':
+				f.write(f"pair_coeff 1*{self.genome_distance_matrix_selected.shape[0]} 1*{self.genome_distance_matrix_selected.shape[0]}" + "\t${id_bac_coef}\t${bac_size}\t${id_bac_cf}\n")
+			elif generation_type == 'both':
+				f.write(f"pair_coeff 3*{self.genome_distance_matrix_selected.shape[0] + 2} 3*{self.genome_distance_matrix_selected.shape[0] + 2}" + "\t${id_bac_coef}\t${bac_size}\t${id_bac_cf}\n")
+			f.write(pair_coeffs)
+			f.write("\n### Run settings ###\n")
+			f.write("timestep\t0.005\n")
+			f.write("neighbor\t0.8 bin # 0.032\n")
+			f.write("neigh_modify\tdelay 1 every 1 check yes\n")
+			if generation_type == 'both':
+				f.write("\n# Grafting layer\n")
+				f.write("group\tgrafting type 1\n")
+				f.write("group\tvilli type 2\n")
+				f.write("group\tmobile subtract all grafting\n")
+				f.write("group\tbacteria subtract mobile villi\n")
+				f.write("fix\tzwalls all wall/reflect zlo EDGE zhi EDGE # for grafting beads 100 1 1 ### OR 100 (MAIN) OR 10 OR 1?\n")
+				f.write("fix\tfreezeGrafting grafting setforce 0 0 0\n")
+				f.write("neigh_modify\texclude group grafting grafting\n")
+			f.write("neigh_modify\tone ${neigh_modify_size} page ${page_size}\n")
+			f.write("\n### Output ###\n")
+			f.write("dump\t2 all atom 1000 dump.lammpstrj\n")
+			f.write("\n# Initial velocity\n\n")
+			if generation_type == 'both':
+				f.write("compute\tTmobile mobile temp\n")
+				f.write("compute_modify\tTmobile dynamic/dof yes ## ???\n")
+				f.write("\ncompute\tTbacteria bacteria temp\n")
+				f.write("compute_modify\tTbacteria dynamic/dof yes ## ???\n")
+				f.write("compute\tTvilli villi temp\n")
+				f.write("compute_modify\tTvilli dynamic/dof yes\n")
+				f.write("\ncompute\tKEbacteria bacteria ke\n")
+				f.write("compute\tKEvilli villi ke\n")
+				f.write("\ncompute\tPEbacteriaatom bacteria pe/atom pair\n")
+				f.write("compute\tPEbacteria bacteria reduce sum c_PEbacteriaatom\n")
+				f.write("\ncompute\tPEvilliatom villi pe/atom pair bond angle\n")
+				f.write("compute\tPEvilli villi reduce sum c_PEvilliatom\n")
+				f.write("\n#compute pairs bacteria property/local patom1 patom2\n")
+				f.write("#compute interactions bacteria pair/local dist eng force\n")
+				f.write("#dump 3 bacteria local 50000 pairwise.dump index c_pairs[1] c_pairs[2] c_interactions[1] c_interactions[2] c_interactions[3]\n")
+				f.write("\nvelocity\tvilli create 0.85 5324324 temp Tvilli\n")
+				f.write("velocity\tbacteria create ${bac_veloc} 5324324 temp Tbacteria\n")
+				f.write("thermo\t1000\n")
+				f.write("thermo_style\tcustom step temp pe ke etotal press c_Tbacteria c_Tvilli c_KEbacteria c_KEvilli c_PEbacteria c_PEvilli  cpuremain\n")
+				f.write("thermo_modify\tlost ignore ## ???\n")
+				f.write("\n# Minimize\n")
+				f.write("minimize\t1E-8 1E-8 10000 10000\n")
+				f.write("\n# Run with limit and frequent balance\n")
+				f.write("fix\tnveinit_villi\tvilli nve/limit 1\n")
+				f.write("fix\tnveinit_bacteria\tbacteria nve/limit ${bac_nve_limit}\n")
+				f.write("fix\tlv_villi\tvilli langevin 0.85 0.85 10 334232 # 1000 or 100000\n")
+				f.write("fix\tlv_bacteria\tbacteria langevin ${temp_bac} ${temp_bac} 100 334232 # 1000 or 100000\n")
+				f.write("fix_modify\tlv_villi\ttemp Tvilli\n")
+				f.write("fix_modify\tlv_bacteria\ttemp Tbacteria\n")
+				f.write("fix\tbalance\tmobile balance 10000 1.1 shift z 10 1.1 weight time 1 # 10000 or 100000\n")
+				f.write("\nrun\t10000\n")
+				f.write("\nminimize\t1E-8 1E-8 10000 10000\n")
+				f.write("\nunfix\tnveinit_villi\n")
+				f.write("unfix\tnveinit_bacteria\n")
+				f.write("unfix\tlv_villi\n")
+				f.write("unfix\tlv_bacteria\n")
+				f.write("fix\tnve\tmobile nve\n")
+				f.write("fix\tlv_villi\tvilli langevin 0.85 0.85 1 334232 # 100 or 10000\n")
+				f.write("fix\tlv_bacteria\tbacteria langevin ${temp_bac} ${temp_bac} 10 334232 # 100 or 10000\n")
+				f.write("fix_modify\tlv_villi\ttemp Tvilli\n")
+				f.write("fix_modify\tlv_bacteria\ttemp Tbacteria\n")
+				f.write("run\t${n_steps}\n")
+				f.write("\nwrite_restart\trestart.equi\n")
+				f.write("write_data\tdata.equi\n")
+			elif generation_type == 'bacteria':
+				f.write("compute\tTbacteria all temp\n")
+				f.write("compute_modify\tTbacteria dynamic/dof yes ## ??? only when lost/gain atoms ?\n")
+				f.write("\ncompute\tKEbacteria all ke\n")
+				f.write("compute\tPEbacteriaatom all pe/atom pair\n")
+				f.write("compute\tPEbacteria all reduce sum c_PEbacteriaatom\n")
+				f.write("\n#compute pairs all property/local patom1 patom2\n")
+				f.write("#compute interactions all pair/local dist eng force\n")
+				f.write("#dump 3 all local 50000 pairwise.dump index c_pairs[1] c_pairs[2] c_interactions[1] c_interactions[2] c_interactions[3]\n")
+				f.write("\nvelocity\tall create ${bac_veloc} 5324324 temp Tbacteria\n")
+				f.write("thermo\t1000\n")
+				f.write("thermo_style\tcustom step temp pe ke etotal press c_Tbacteria c_KEbacteria c_PEbacteria cpuremain\n")
+				f.write("thermo_modify\tlost ignore ## ???\n")
+				f.write("\n# Minimize\n")
+				f.write("minimize\t1E-8 1E-8 10000 10000\n")
+				f.write("\n# Run with limit and frequent balance\n")
+				f.write("fix\tnveinit\tall nve/limit ${bac_nve_limit}\n")
+				f.write("fix\tlv\tall langevin ${temp_bac} ${temp_bac} 100 334232 # 1000 or 100000\n")
+				f.write("fix_modify\tlv\ttemp Tbacteria\n")
+				f.write("fix\tbalance\tall balance 10000 1.1 shift z 10 1.1 weight time 1 # 10000 or 100000\n")
+				f.write("\nrun\t10000\n")
+				f.write("\nminimize\t1E-8 1E-8 10000 10000\n")
+				f.write("\nunfix\tnveinit\n")
+				f.write("unfix\tlv\n")
+				f.write("fix\tnve\tall nve\n")
+				f.write("fix\tlv\tall langevin ${temp_bac} ${temp_bac} 10 334232 # 100 or 10000\n")
+				f.write("fix_modify\tlv\ttemp Tbacteria\n")
+				f.write("run\t${n_steps}\n")
+				f.write("\nwrite_restart\trestart.equi\n")
+				f.write("write_data\tdata.equi\n")
+
+	def generate_run_script(self, 
+						 output_dir_path: str = "../data/03_run_experiments/", 
+						 generation_type: str = "bacteria", 
+						 coefficients_type: str = "gt", 
+						 processing_units: Tuple[int, int, int] = (10, 10, 1),
+						 queue: str = "long",
+						 time: str = "24:00:00",
+						 memory: int = 128,
+						 nsteps: int = 3000000,
+						 scaling_factor_for_idbac: int = 10,
+						 scaling_factor_for_vilbac: int = 10,
+						 bac_size: float = 0.04,
+						 bac_nve_limit: float = 2.5,
+						 id_bac_cf: float = 2.5,
+						 diff_bac_cf: float = 2.5,
+						 vil_bac_cf: float = 2.5,
+						 global_cf: float = 2.5,
+						 neigh_modify_size: float = 55000,
+						 page_size: float = 1000000,
+						 bac_veloc: float = 0.000000004,
+						 temp_bac: float = 0.000000004,
+						 ):
+		""""
+		:param coefficients_type: 'gt' or 'rnd' or 'reshuffled'
+		"""
+		self.experiments_path = output_dir_path
+		if not isdir(self.experiments_path):
+			makedirs(self.experiments_path)
+		if not isdir(f"{self.experiments_path}/{generation_type}_{coefficients_type}"):
+			makedirs(f"{self.experiments_path}/{generation_type}_{coefficients_type}")
+		
+		with open(f"{self.experiments_path}/{generation_type}_{coefficients_type}/run_lammps.sh", 'w') as f:
+			f.write("#!/bin/bash\n")
+			f.write(f"\n#SBATCH --job-name=lammps_{generation_type}_{coefficients_type}\n")
+			f.write("#SBATCH --output=%x.%j.%N.out\n")
+			f.write("#SBATCH --error=%x.%j.%N.err\n")
+			f.write("#SBATCH --nodes=1\n")
+			f.write(f"#SBATCH --ntasks={processing_units[0] * processing_units[1] * processing_units[2]}\n")
+			if queue != 'eternal':
+				f.write(f"#SBATCH --time={time}\n")
+			f.write("#SBATCH --partition=genD\n")
+			f.write(f"#SBATCH --qos={queue}\n")
+			f.write(f"#SBATCH --mem={memory}G\n")
+			f.write("#SBATCH --cpus-per-task=1\n")
+			f.write("\nmodule purge\n")
+			f.write("module load Anaconda3\n")
+			f.write("source ~/.bashrc\n")
+			f.write("conda activate lammps\n")
+			f.write("module load GCC/11.3.0\n")
+			f.write("module load GCCcore/11.3.0\n")
+			f.write("module load CMake/3.23.1-GCCcore-11.3.0\n")
+			f.write("module load OpenMPI/4.1.4-GCC-11.3.0\n")
+			f.write(f"\nn_steps={nsteps}\n")
+			if coefficients_type == "gt":
+				id_bac_coef = "{:.14f}".format(max([float(x) for x in self.result_df_write.Value]) * scaling_factor_for_idbac)
+				vil_bac_coef = "{:.14f}".format(max([float(x) for x in self.result_df_write.Value]) * scaling_factor_for_vilbac)
+			elif coefficients_type == "rnd":
+				id_bac_coef = "{:.14f}".format(max([float(x) for x in self.result_random_df_write.Value]) * scaling_factor_for_idbac)
+				vil_bac_coef = "{:.14f}".format(max([float(x) for x in self.result_random_df_write.Value]) * scaling_factor_for_vilbac)
+			elif coefficients_type == "reshuffled":
+				id_bac_coef = "{:.14f}".format(max([float(x) for x in self.result_reshuffled_df_write.Value]) * scaling_factor_for_idbac)
+				vil_bac_coef = "{:.14f}".format(max([float(x) for x in self.result_reshuffled_df_write.Value]) * scaling_factor_for_vilbac)
+			f.write(f"id_bac_coef={id_bac_coef}\n")
+			f.write(f"vil_bac_coef={vil_bac_coef}\n")
+			f.write(f"\nbac_size={bac_size}\n")
+			f.write(f"bac_nve_limit={bac_nve_limit}\n")
+			f.write(f"id_bac_cf={id_bac_cf}\n")
+			f.write(f"diff_bac_cf={diff_bac_cf}\n")
+			f.write(f"vil_bac_cf={vil_bac_cf}\n")
+			f.write(f"global_cf={global_cf}\n")
+			f.write(f"neigh_modify_size={neigh_modify_size}\n")
+			f.write(f"page_size={page_size}\n")
+			f.write('vil_bac_size=$(echo "2 + ${bac_size}/2" | bc -l)\n')
+			f.write(f"bac_veloc={bac_veloc}\n")
+			f.write(f"temp_bac={temp_bac}\n")	
+			f.write("\n# export OMP_NUM_THREADS=100\n")
+			f.write("\nmpirun lmp_mpi -in run.in -var n_steps ${n_steps} -var temp_bac ${temp_bac} -var bac_nve_limit ${bac_nve_limit} -var bac_veloc ${bac_veloc} -var neigh_modify_size ${neigh_modify_size} -var bac_size ${bac_size} -var id_bac_cf ${id_bac_cf} -var vil_bac_size ${vil_bac_size} -var vil_bac_cf ${vil_bac_cf} -var id_bac_coef ${id_bac_coef} -var vil_bac_coef ${vil_bac_coef} -var global_cf ${global_cf} -var diff_bac_cf ${diff_bac_cf} -var page_size ${page_size}\n")
