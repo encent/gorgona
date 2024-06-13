@@ -1016,7 +1016,7 @@ class LammpsRunFileGenerator():
 				f.write("velocity\tbacteria create ${bac_veloc} 5324324 temp Tbacteria\n")
 				f.write("thermo\t1000\n")
 				f.write("thermo_style\tcustom step temp pe ke etotal press c_Tbacteria c_Tvilli c_KEbacteria c_KEvilli c_PEbacteria c_PEvilli  cpuremain\n")
-				f.write("# thermo_modify\tlost ignore ## ???\n")
+				f.write("#thermo_modify\tlost ignore ## ???\n")
 				f.write("\n# Minimize\n")
 				f.write("minimize\t1E-8 1E-8 10000 10000\n")
 				f.write("\n# Run with limit and frequent balance\n")
