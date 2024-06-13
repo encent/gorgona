@@ -927,7 +927,7 @@ class LammpsRunFileGenerator():
 					  output_dir_path: str = "../data/03_run_experiments/",
 					  generation_type: str = "bacteria",
 					  coefficients_type: str = "gt",
-					  processing_units: Tuple[int, int, int] = (10, 10, 1),
+					  processing_units: Tuple[int, int, int] = (10, 10, 1)
 					  ):
 		""""
 		:param coefficients_type: 'gt' or 'rnd' or 'reshuffled'
@@ -981,7 +981,7 @@ class LammpsRunFileGenerator():
 			f.write(pair_coeffs)
 			f.write("\n### Run settings ###\n")
 			f.write("timestep\t0.005\n")
-			f.write("neighbor\t0.8 bin # 0.032\n")
+			f.write("neighbor\t${neighbor_skin_distance} bin # 0.032\n")
 			f.write("neigh_modify\tdelay 1 every 1 check yes\n")
 			if generation_type == 'both':
 				f.write("\n# Grafting layer\n")
@@ -1016,7 +1016,7 @@ class LammpsRunFileGenerator():
 				f.write("velocity\tbacteria create ${bac_veloc} 5324324 temp Tbacteria\n")
 				f.write("thermo\t1000\n")
 				f.write("thermo_style\tcustom step temp pe ke etotal press c_Tbacteria c_Tvilli c_KEbacteria c_KEvilli c_PEbacteria c_PEvilli  cpuremain\n")
-				f.write("thermo_modify\tlost ignore ## ???\n")
+				f.write("# thermo_modify\tlost ignore ## ???\n")
 				f.write("\n# Minimize\n")
 				f.write("minimize\t1E-8 1E-8 10000 10000\n")
 				f.write("\n# Run with limit and frequent balance\n")
@@ -1053,7 +1053,7 @@ class LammpsRunFileGenerator():
 				f.write("\nvelocity\tall create ${bac_veloc} 5324324 temp Tbacteria\n")
 				f.write("thermo\t1000\n")
 				f.write("thermo_style\tcustom step temp pe ke etotal press c_Tbacteria c_KEbacteria c_PEbacteria cpuremain\n")
-				f.write("thermo_modify\tlost ignore ## ???\n")
+				f.write("#thermo_modify\tlost ignore ## ???\n")
 				f.write("\n# Minimize\n")
 				f.write("minimize\t1E-8 1E-8 10000 10000\n")
 				f.write("\n# Run with limit and frequent balance\n")
@@ -1088,7 +1088,8 @@ class LammpsRunFileGenerator():
 						 id_bac_cf: float = 2.5,
 						 diff_bac_cf: float = 2.5,
 						 vil_bac_cf: float = 2.5,
-						 global_cf: float = 2.5,
+						 global_cf: float = 2.5, 
+						 neighbor_skin_distance: float = 0.2,
 						 neigh_modify_size: float = 55000,
 						 page_size: float = 1000000,
 						 bac_veloc: float = 0.000000004,
@@ -1142,10 +1143,11 @@ class LammpsRunFileGenerator():
 			f.write(f"diff_bac_cf={diff_bac_cf}\n")
 			f.write(f"vil_bac_cf={vil_bac_cf}\n")
 			f.write(f"global_cf={global_cf}\n")
+			f.write(f"neighbor_skin_distance={neighbor_skin_distance}\n")
 			f.write(f"neigh_modify_size={neigh_modify_size}\n")
 			f.write(f"page_size={page_size}\n")
 			f.write('vil_bac_size=$(echo "2 + ${bac_size}/2" | bc -l)\n')
 			f.write(f"bac_veloc={bac_veloc}\n")
 			f.write(f"temp_bac={temp_bac}\n")	
 			f.write("\n# export OMP_NUM_THREADS=100\n")
-			f.write("\nmpirun lmp_mpi -in run.in -var n_steps ${n_steps} -var temp_bac ${temp_bac} -var bac_nve_limit ${bac_nve_limit} -var bac_veloc ${bac_veloc} -var neigh_modify_size ${neigh_modify_size} -var bac_size ${bac_size} -var id_bac_cf ${id_bac_cf} -var vil_bac_size ${vil_bac_size} -var vil_bac_cf ${vil_bac_cf} -var id_bac_coef ${id_bac_coef} -var vil_bac_coef ${vil_bac_coef} -var global_cf ${global_cf} -var diff_bac_cf ${diff_bac_cf} -var page_size ${page_size}\n")
+			f.write("\nmpirun lmp_mpi -in run.in -var n_steps ${n_steps} -var temp_bac ${temp_bac} -var bac_nve_limit ${bac_nve_limit} -var bac_veloc ${bac_veloc} -var neigh_modify_size ${neigh_modify_size} -var bac_size ${bac_size} -var id_bac_cf ${id_bac_cf} -var vil_bac_size ${vil_bac_size} -var vil_bac_cf ${vil_bac_cf} -var id_bac_coef ${id_bac_coef} -var vil_bac_coef ${vil_bac_coef} -var global_cf ${global_cf} -var diff_bac_cf ${diff_bac_cf} -var page_size ${page_size} -var neighbor_skin_distance ${neighbor_skin_distance}\n")

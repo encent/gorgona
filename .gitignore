@@ -1,7 +1,15 @@
 .vscode
+data/01_bacteria_amount
 data/02_coordinates
+data/03_matrices
+data/03_pair_coefficients
+data/03_run_experiments_13-06-24_500K
+data/03_run_experiments_13-06-24
 data/03_run_experiments_12-06-24
+examples/.DS_Store
+examples/.ipynb_checkpoints
 glampy.egg-info
+glampy
 glampy/__pycache__/generator.cpython-39.pyc
 glampy/__pycache__/sampler.cpython-39.pyc
 glampy/__pycache__/utils.cpython-39.pyc
