@@ -9,7 +9,6 @@ data/03_run_experiments_12-06-24
 examples/.DS_Store
 examples/.ipynb_checkpoints
 gorgona.egg-info
-gorgona
 gorgona/__pycache__/generator.cpython-39.pyc
 gorgona/__pycache__/sampler.cpython-39.pyc
 gorgona/__pycache__/utils.cpython-39.pyc
