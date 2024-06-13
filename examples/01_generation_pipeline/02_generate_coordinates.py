@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Import BacteriaVilliCoordinatesGenerator class from generator module
-from glampy.generator import BacteriaVilliCoordinatesGenerator
+from gorgona.generator import BacteriaVilliCoordinatesGenerator
 
 # Define and initialize parameters
 params = {
