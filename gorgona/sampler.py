@@ -4,7 +4,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-
+# Adapted from https://github.com/Compizfox/MDBrushGenerators
 class PoissonDiskSampler:
 	"""
 	Generate a Poisson-disk 2D or 3D point set using cell list accelerated dart throwing.

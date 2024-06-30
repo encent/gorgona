@@ -17,7 +17,7 @@ from os.path import isdir
 from gorgona.sampler import PoissonDiskSampler
 from gorgona.utils import compute_density
 
-
+# Adapted from https://github.com/Compizfox/MDBrushGenerators
 class BrushGenerator(ABC):
 	"""
 	Generate a LAMMPS data file containing a coarse-grained polymer brush grafted to a planar wall in a rectangular box.
@@ -398,6 +398,7 @@ class BrushGenerator(ABC):
 				f.write("\n")
 
 
+# Adapted from https://github.com/Compizfox/MDBrushGenerators
 class ArchitectureGenerator(BrushGenerator):
 	"""
 	Generate a LAMMPS data file containing a XXX polymer brush grafted to a planar wall in a rectangular box.
@@ -578,12 +579,25 @@ class BacteriaAmountGenerator():
 	# create defaul __init__ method
 	def __init__(self, 
 			  input_file_path: str = "../data/input_data/average_day7.txt",
-			  threshold_on_bacteria_amount: float = 10.0):
+			  threshold_on_bacteria_amount: float = 10.0, 
+			  plot_figs: bool = False, 
+			  figures_path: str = "../data/figures"):
+		self.figures_path = figures_path
+		if not isdir(figures_path):
+			makedirs(figures_path)
 		self.threshold_on_bacteria_amount = threshold_on_bacteria_amount
 		num_bac_genomes = pd.read_csv(input_file_path, sep=" ")
 		num_bac_genomes = num_bac_genomes[num_bac_genomes['count'] > threshold_on_bacteria_amount]
 		num_bac_genomes.reset_index(drop=True, inplace=True)
 		self.num_bac_genomes = num_bac_genomes
+		if plot_figs:
+			# Plot a histogram of the 'counts' column of the result dataframe
+			plt.hist(self.num_bac_genomes['count'], bins=50, alpha=0.5)
+			plt.title('Histogram of Counts')
+			plt.xlabel('Counts')
+			plt.ylabel('Frequency')
+			plt.savefig(f"{self.figures_path}/bacteria_amount_threshold_{self.threshold_on_bacteria_amount}.png", dpi=300)
+			plt.show()
 		
 	def generate_bacteria_amount(self, 
 								 output_dir_path: str = "../data/01_bacteria_amount/", 
@@ -682,7 +696,10 @@ class BacteriaVilliCoordinatesGenerator():
 		
 	def generate_coordinates(self, 
 						  output_dir_path: str = "../data/02_coordinates/", 
-						  plot_figs: bool = False):
+						  plot_figs: bool = False, 
+						  figures_path: str = "../data/figures"):
+		if not isdir(figures_path):
+			makedirs(figures_path)
 		archgen = ArchitectureGenerator(self.box_size, self.seed, self.min_dist, self.n_anchors, self.units, bottom_padding=self.bottom_padding, mode=self.mode)
 		
 		# generate villi coordinates
@@ -695,6 +712,7 @@ class BacteriaVilliCoordinatesGenerator():
 			if plot_figs:
 				fig = plt.figure(figsize=(7,7))
 				plt.scatter(archgen.coordinates[:, 0], archgen.coordinates[:, 1])
+				plt.savefig(f"{figures_path}/villi_top_view_{n_actual}villi_{self.box_size[0]}_{self.box_size[1]}_{self.box_size[2]}.png", dpi=300)
 				plt.show()
 			
 			# Construct grafting beads (fixed layer)
@@ -722,6 +740,7 @@ class BacteriaVilliCoordinatesGenerator():
 			fig = plt.figure(figsize=(7,7))
 			ax = fig.add_subplot(projection='3d') 
 			ax.scatter(archgen.coordinates_bacteria[:, 0], archgen.coordinates_bacteria[:, 1], archgen.coordinates_bacteria[:, 2], s=self.min_bac_dist)
+			plt.savefig(f"{figures_path}/bacteria_{n_bacteria_actual}bac_{self.bacteria_box_size[0]}_{self.bacteria_box_size[1]}_{self.bacteria_box_size[2]}.png", dpi=300)
 			plt.show()
 		archgen.build(spacing=self.spacing,
 						bead_type="bacteria",
@@ -750,24 +769,30 @@ class LammpsRunFileGenerator():
 			  random_mean: float = 0.2,
 			  random_std: float = 0.04,
 			  plot_figs: bool = False,
+			  figures_path: str = "../data/figures",
 			  ):
 		""""
 		:param random_mean: has to be selected based on the distribution of the observed (GT) coefficients
 		:param random_std: has to be selected based on the distribution of the observed (GT) coefficients
 		"""
-
+		self.figures_path = figures_path
+		if not isdir(figures_path):
+			makedirs(figures_path)
 		# Read input files
 		num_bac_genomes = pd.read_csv(input_bac_amount_file_path, sep='\t')
+		self.num_bac = num_bac_genomes['count'].sum()
 		genome_distance_matrix = pd.read_csv(input_func_distances_file_path, sep=" ")
 		genome_distance_matrix_selected = genome_distance_matrix.loc[list(num_bac_genomes['genome']), list(num_bac_genomes['genome'])]
 		self.genome_distance_matrix_selected = genome_distance_matrix_selected.copy()
 		# Save matrices to further display them as heatmaps
-		if not isdir(output_matrices_dir_path):
-			makedirs(output_matrices_dir_path)
-		
+		if not isdir(f"{output_matrices_dir_path}/{self.num_bac}_bac"):
+			makedirs(f"{output_matrices_dir_path}/{self.num_bac}_bac")
+		if not isdir(f"{figures_path}/{self.num_bac}_bac"):
+			makedirs(f"{figures_path}/{self.num_bac}_bac")
+
 		##### Observed coefficients
-		genome_distance_matrix_selected.to_csv(f"{output_matrices_dir_path}/MATRIX_b_gt.tsv", sep='\t')
-		genome_distance_matrix_selected.to_csv(f"{output_matrices_dir_path}/MATRIX_v_b_gt.tsv", sep='\t')
+		genome_distance_matrix_selected.to_csv(f"{output_matrices_dir_path}/{self.num_bac}_bac/MATRIX_b_gt.tsv", sep='\t')
+		genome_distance_matrix_selected.to_csv(f"{output_matrices_dir_path}/{self.num_bac}_bac/MATRIX_v_b_gt.tsv", sep='\t')
 
 		upper_triangle_mask = np.triu(np.ones(genome_distance_matrix.shape), k=1).astype(bool)
 		result = genome_distance_matrix.where(upper_triangle_mask).stack()
@@ -776,11 +801,12 @@ class LammpsRunFileGenerator():
 		if plot_figs:
 			## Distribution of distances for initial genomes quantity (174)
 			result_df['Value'].hist(bins=50)
-			plt.xlabel('Similarity')
-			plt.title(f'Distribution of similarities for {genome_distance_matrix.shape[0]} bacterial genomes')
+			plt.xlabel('Functional distance')
+			plt.title(f'GT func. distances for {genome_distance_matrix.shape[0]} bacterial genomes')
+			plt.savefig(f"{figures_path}/{self.num_bac}_bac/GT_func_dist_{genome_distance_matrix.shape[0]}_bactypes.png", dpi=300)
 			plt.show()
-			print(f"Median: {result_df['Value'].median()}")
-			print(f"Max: {(1 / result_df['Value']).max()}")
+			# print(f"Median: {result_df['Value'].median()}")
+			# print(f"Max: {(1 / result_df['Value']).max()}")
 
 		upper_triangle_mask = np.triu(np.ones(genome_distance_matrix_selected.shape), k=1).astype(bool)
 		result = genome_distance_matrix_selected.where(upper_triangle_mask).stack()
@@ -791,20 +817,23 @@ class LammpsRunFileGenerator():
 			## Distribution of distances for selected genomes quantity (48)
 			result_df['Value'].hist(bins=50)
 			plt.xlabel('Similarity')
-			plt.title(f'Distribution of GT similarities for {genome_distance_matrix_selected.shape[0]} bacterial genomes')
+			plt.title(f'GT func. distances for {genome_distance_matrix_selected.shape[0]} selected bacterial genomes')
+			plt.savefig(f"{figures_path}/{self.num_bac}_bac/GT_func_dist_{genome_distance_matrix.shape[0]}_selected_bactypes.png", dpi=300)
 			plt.show()
-			print(f"Median: {result_df['Value'].median()}")
-			print(f"Max: {(1 / result_df['Value']).max()}")
+			# print(f"Median: {result_df['Value'].median()}")
+			# print(f"Max: {(1 / result_df['Value']).max()}")
 		#####
 
 		##### Random coefficients
+		"""
 		random_sample = np.random.normal(random_mean, random_std, len(result_df['Value']))
 
 		if plot_figs:
 			plt.hist(random_sample, bins=50)
 			plt.xlabel('Similarity')
 			plt.xlim((0.05, 0.55))
-			plt.title('Distribution of RND similarities for 34 bacterial genomes')
+			plt.title(f'Random func. distances for {genome_distance_matrix_selected.shape[0]} bacterial genomes')
+			plt.savefig(f"{figures_path}/{self.num_bac}_bac/Random_func_dist_{genome_distance_matrix_selected.shape[0]}_selected_bactypes.png", dpi=300)
 			plt.show()
 			print(f"Median: {np.median(random_sample)}")
 			print(f"Max: {np.max(1 / random_sample)}")
@@ -818,14 +847,15 @@ class LammpsRunFileGenerator():
 		genome_distance_matrix_random.values.T[lower_triangle_indices] = random_sample
 
 		# Save matrices to further display them as heatmaps
-		genome_distance_matrix_random.to_csv(f"{output_matrices_dir_path}/MATRIX_b_rnd_true.tsv", sep='\t')
-		genome_distance_matrix_random.to_csv(f"{output_matrices_dir_path}/MATRIX_v_b_rnd_true.tsv", sep='\t')
+		genome_distance_matrix_random.to_csv(f"{output_matrices_dir_path}/{self.num_bac}_bac/MATRIX_b_rnd_true.tsv", sep='\t')
+		genome_distance_matrix_random.to_csv(f"{output_matrices_dir_path}/{self.num_bac}_bac/MATRIX_v_b_rnd_true.tsv", sep='\t')
 
 		rnd_upper_triangle_mask = np.triu(np.ones(genome_distance_matrix_random.shape), k=1).astype(bool)
 		result_random = genome_distance_matrix_random.where(rnd_upper_triangle_mask).stack()
 		result_random_df = result_random.reset_index()
 		result_random_df.columns = ['Row', 'Column', 'Value']
 		self.result_random_df = result_random_df.copy()
+		"""
 		#####
 
 		##### Re-shuffle coefficients (same as GT but re-shuffled)
@@ -837,13 +867,15 @@ class LammpsRunFileGenerator():
 
 		np.random.shuffle(reshuffled_sample)
 
+		"""
 		if plot_figs:
 			plt.hist(reshuffled_sample, bins=50)
 			plt.xlabel('Similarity')
 			plt.xlim((0.05, 0.55))
-			plt.title('Distribution of RSHFL similarities for 34 bacterial genomes')
-			plt.plot()
-
+			plt.title(f'Shuffled func. distances for {genome_distance_matrix_selected.shape[0]} bacterial genomes')
+			plt.savefig(f"{figures_path}/{self.num_bac}_bac/Shuffled_func_dist_{genome_distance_matrix_selected.shape[0]}_selected_bactypes.png", dpi=300)
+			plt.show()
+		"""
 		genome_distance_matrix_reshuffled = genome_distance_matrix_selected.copy()
 
 		lower_triangle_indices = np.tril_indices(34, -1)
@@ -853,8 +885,8 @@ class LammpsRunFileGenerator():
 		genome_distance_matrix_reshuffled.values.T[lower_triangle_indices] = reshuffled_sample
 
 		# Save matrices to further display them as heatmaps
-		genome_distance_matrix_reshuffled.to_csv(f"{output_matrices_dir_path}/MATRIX_b_reshuffled.tsv", sep='\t')
-		genome_distance_matrix_reshuffled.to_csv(f"{output_matrices_dir_path}/MATRIX_v_b_reshuffled.tsv", sep='\t')
+		genome_distance_matrix_reshuffled.to_csv(f"{output_matrices_dir_path}/{self.num_bac}_bac/MATRIX_b_reshuffled.tsv", sep='\t')
+		genome_distance_matrix_reshuffled.to_csv(f"{output_matrices_dir_path}/{self.num_bac}_bac/MATRIX_v_b_reshuffled.tsv", sep='\t')
 
 		rnd_upper_triangle_mask = np.triu(np.ones(genome_distance_matrix_reshuffled.shape), k=1).astype(bool)
 		result_reshuffled = genome_distance_matrix_reshuffled.where(rnd_upper_triangle_mask).stack()
@@ -863,7 +895,7 @@ class LammpsRunFileGenerator():
 		self.result_reshuffled_df = result_reshuffled_df.copy()
 		#####
 
-	def generate_pair_coefficients(self, 
+	def generate_pair_coefficients(self,
 					  output_dir_path: str = "../data/03_pair_coefficients/",
 					  generation_type: str = "bacteria",
 					  scaling_factor: int = 10e5, 
@@ -876,7 +908,7 @@ class LammpsRunFileGenerator():
 			self.num_shift = 1
 
 		result_df_write = self.result_df.copy()
-		result_random_df_write = self.result_random_df.copy()
+		# result_random_df_write = self.result_random_df.copy()
 		result_reshuffled_df_write = self.result_reshuffled_df.copy()
 
 		particle_types = dict(zip(list(self.genome_distance_matrix_selected.index), list(range(self.num_shift, self.genome_distance_matrix_selected.shape[0] + self.num_shift))))
@@ -886,9 +918,9 @@ class LammpsRunFileGenerator():
 		result_df_write['Value'] = list(map(lambda x: format(1 / x / self.scaling_factor, '.15f'), result_df_write['Value']))
 		# 10e5
 
-		result_random_df_write['Row'] = list(map(lambda x: particle_types[x], result_random_df_write['Row']))
-		result_random_df_write['Column'] = list(map(lambda x: particle_types[x], result_random_df_write['Column']))
-		result_random_df_write['Value'] = list(map(lambda x: format(1 / x / self.scaling_factor, '.15f'), result_random_df_write['Value']))
+		# result_random_df_write['Row'] = list(map(lambda x: particle_types[x], result_random_df_write['Row']))
+		# result_random_df_write['Column'] = list(map(lambda x: particle_types[x], result_random_df_write['Column']))
+		# result_random_df_write['Value'] = list(map(lambda x: format(1 / x / self.scaling_factor, '.15f'), result_random_df_write['Value']))
 		# 10e5
 
 		result_reshuffled_df_write['Row'] = list(map(lambda x: particle_types[x], result_reshuffled_df_write['Row']))
@@ -897,33 +929,34 @@ class LammpsRunFileGenerator():
 		# 10e5
 
 		self.result_df_write = result_df_write.copy()
-		self.result_random_df_write = result_random_df_write.copy()
+		# self.result_random_df_write = result_random_df_write.copy()
 		self.result_reshuffled_df_write = result_reshuffled_df_write.copy()
 
-		if not isdir(output_dir_path):
-			makedirs(output_dir_path)
+		if not isdir(f"{output_dir_path}/{self.num_bac}_bac"):
+			makedirs(f"{output_dir_path}/{self.num_bac}_bac")
 		
 		# Write pair coefficients
 		bacteria_size = "${bac_size}" # At the moment all bacteria have the same size and mass
 		identical_limit = "${diff_bac_cf}" # distance limit for identical particles
 
 		fname = 'PAIR_COEFS_b_gt.txt' if self.num_shift == 1 else 'PAIR_COEFS_v_b_gt.txt'
-		with open(f"{output_dir_path}/{fname}", 'w') as f:
+		with open(f"{output_dir_path}/{self.num_bac}_bac/{fname}", 'w') as f:
 			for i, row in result_df_write.iterrows():
 				f.write(f"pair_coeff {row['Row']} {row['Column']}\t{row['Value']}\t{bacteria_size}\t{identical_limit}\n")
 
-		fname = 'PAIR_COEFS_b_rnd.txt' if self.num_shift == 1 else 'PAIR_COEFS_v_b_rnd.txt'
-		with open(f"{output_dir_path}/{fname}", 'w') as f:
-			for i, row in result_random_df_write.iterrows():
-				f.write(f"pair_coeff {row['Row']} {row['Column']}\t{row['Value']}\t{bacteria_size}\t{identical_limit}\n")
+		# fname = 'PAIR_COEFS_b_rnd.txt' if self.num_shift == 1 else 'PAIR_COEFS_v_b_rnd.txt'
+		# with open(f"{output_dir_path}/{self.num_bac}_bac/{fname}", 'w') as f:
+		# 	for i, row in result_random_df_write.iterrows():
+		# 		f.write(f"pair_coeff {row['Row']} {row['Column']}\t{row['Value']}\t{bacteria_size}\t{identical_limit}\n")
 
 		fname = 'PAIR_COEFS_b_reshuffled.txt' if self.num_shift == 1 else 'PAIR_COEFS_v_b_reshuffled.txt'
-		with open(f"{output_dir_path}/{fname}", 'w') as f:
+		with open(f"{output_dir_path}/{self.num_bac}_bac/{fname}", 'w') as f:
 			for i, row in result_reshuffled_df_write.iterrows():
 				f.write(f"pair_coeff {row['Row']} {row['Column']}\t{row['Value']}\t{bacteria_size}\t{identical_limit}\n")
 		
 	def generate_run_files(self, 
 					  coordinates_path: str = "../data/02_coordinates/bacteria_zlimbac_0_10_numbac_25002_bacsize_0.12_bmass_0.001728.pos",
+					  coefficients_path: str = "../data/03_pair_coefficients/",
 					  output_dir_path: str = "../data/03_run_experiments/",
 					  generation_type: str = "bacteria",
 					  coefficients_type: str = "gt",
@@ -933,6 +966,7 @@ class LammpsRunFileGenerator():
 		:param coefficients_type: 'gt' or 'rnd' or 'reshuffled'
 		"""
 		self.coordinates_path = coordinates_path
+		self.coefficients_path = coefficients_path
 		self.experiments_path = output_dir_path
 		if not isdir(self.experiments_path):
 			makedirs(self.experiments_path)
@@ -944,7 +978,7 @@ class LammpsRunFileGenerator():
 			self.fid_gen_type = "b"
 		elif generation_type == 'both':
 			self.fid_gen_type = "v_b"
-		with open(f"{self.coefficients_path}/PAIR_COEFS_{self.fid_gen_type}_{coefficients_type}.txt", 'r') as f:
+		with open(f"{self.coefficients_path}/{self.num_bac}_bac/PAIR_COEFS_{self.fid_gen_type}_{coefficients_type}.txt", 'r') as f:
 			pair_coeffs = f.read()
 		
 		with open(f"{self.experiments_path}/{generation_type}_{coefficients_type}/run.in", 'w') as f:
