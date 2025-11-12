@@ -6,9 +6,10 @@ data/03_pair_coefficients
 data/03_run_experiments_*
 data/figures
 data/.DS_Store
+data/input_files/cooperation*
 examples/.DS_Store
-examples/02_analysis_pipeline
-examples/.ipynb_checkpoints
+examples/02_analysis_pipeline/*
+examples/.ipynb_checkpoints/*
 gorgona.egg-info
 gorgona/__pycache__/*.pyc
 gorgona.egg-info/dependency_links.txt
