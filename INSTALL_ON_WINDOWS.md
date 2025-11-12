@@ -19,9 +19,10 @@
 	cd gorgona
 	conda env create -f environment.yml # Create gorgona conda environment
 	conda activate gorgona # Activate the environment
-	pip install -e # Gorgona installation
+	pip install -e . # Gorgona installation
 	```
 8. Download and install Microsoft MPI (msmpisetup.exe only!): https://www.microsoft.com/en-us/download/details.aspx?id=100593
 9. Download and install LAMMPS: https://rpm.lammps.org/windows/LAMMPS-64bit-latest-MSMPI.exe
 10. Test. Go to the Windows Start Menu. From there, find the LAMMPS application (folder). Click on it and then click on the `Examples` folder. Once inside the `Examples`, go to the `crack` folder. Clear the address bar, put instead `cmd` and press Enter. In the command line prompt put this command: `mpiexec -n 4 lmp -in in.crack.lmp`
 11. If this worked correctly, congratulations! Everything is set for the workshop.
+
