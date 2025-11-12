@@ -1,4 +1,5 @@
 .vscode
+data/input_files
 data/01_bacteria_amount
 data/02_coordinates
 data/03_matrices
@@ -7,6 +8,7 @@ data/03_run_experiments_*
 data/figures
 data/.DS_Store
 examples/.DS_Store
+examples/02_analysis_pipeline
 examples/.ipynb_checkpoints
 gorgona.egg-info
 gorgona/__pycache__/*.pyc
