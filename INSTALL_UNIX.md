@@ -16,13 +16,14 @@
 	cd Desktop/Gorgona_workshop_13_11_2025
 	git clone https://github.com/encent/gorgona # Clone gorgona repository
 	cd gorgona
-	conda env create -f environment.yml # Create gorgona conda environment
-	conda activate gorgona # Activate the environment
+	mamba env create -f environment.yml # Create gorgona conda environment
+	mamba activate gorgona # Activate the environment
 	pip install -e . # Gorgona installation
-	conda install -c conda-forge lammps # LAMMPS installation
+	mamba install -c conda-forge lammps # LAMMPS installation
 	git clone https://github.com/lammps/lammps # Clone lammps repository
 	# Test (if lammps works properly)
 	cd lammps/examples/crack
 	mpirun -n 4 lmp_mpi -in in.crack
 	```
 7. If this worked correctly, congratulations! Everything is set for the workshop.
+
