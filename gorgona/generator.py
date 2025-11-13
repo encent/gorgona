@@ -878,7 +878,7 @@ class LammpsRunFileGenerator():
 		"""
 		genome_distance_matrix_reshuffled = genome_distance_matrix_selected.copy()
 
-		lower_triangle_indices = np.tril_indices(34, -1)
+		lower_triangle_indices = np.tril_indices(genome_distance_matrix_selected.shape[0], -1)
 		genome_distance_matrix_reshuffled.values[lower_triangle_indices] = reshuffled_sample
 
 		# Mirror the values to the upper triangle

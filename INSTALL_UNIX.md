@@ -1,17 +1,17 @@
-# Installation on Mac (Intel chip)
+# Installation on macOS/Linux
 
-1. Download and install Ovito Basic: https://www.ovito.org/
-2. Download and install Git: 
-3. You must have `Python 3` and `conda` installed on your system. Open Terminal app to check whether you have both:
+1. Download and install **Ovito Basic**: https://www.ovito.org/
+2. In Terminal app, check if you have Git: `git --version`. If you do have it, go to the next step. If not, let me know.
+3. Install Miniforge:
 	```bash
-	python3 --version # to check that the installation went properly. Should print version of Python.
-	conda --version # should print the version number. If not -- see the instructions below.
+	curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh"
+	# or
+	wget "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh"
+	bash Miniforge3-$(uname)-$(uname -m).sh
 	```
-4. If Python 3 is missing, follow the installation instructions from [the Python official website](https://www.python.org/)
-5. If `conda` is missing, follow [these instructions](https://www.anaconda.com/docs/getting-started/miniconda/install) to install Miniconda.
-6. After installation is done, close and open again the Terminal app. (base) should appear next to the command line prompt.
-7. On your desktop create the directory `Gorgona_workshop_13_11_2025`
-8. In the Anaconda Prompt window run this sequence of commands:
+4. After installation is done, close and open again the Terminal app. (base) should appear next to the command line prompt.
+5. On your desktop create directory `Gorgona_workshop_13_11_2025`
+6. In Terminal run these commands:
 	```bash
 	cd Desktop/Gorgona_workshop_13_11_2025
 	git clone https://github.com/encent/gorgona # Clone gorgona repository
@@ -19,8 +19,10 @@
 	conda env create -f environment.yml # Create gorgona conda environment
 	conda activate gorgona # Activate the environment
 	pip install -e . # Gorgona installation
-	conda install lammps # LAMMPS installation
-	conda install openkim-models
+	conda install -c conda-forge lammps # LAMMPS installation
+	git clone https://github.com/lammps/lammps # Clone lammps repository
+	# Test (if lammps works properly)
+	cd lammps/examples/crack
+	mpirun -n 4 lmp_mpi -in in.crack
 	```
-9. Test. Go to the LAMMPS directory, then to the `Examples` folder. Once inside the `Examples`, go to the `crack` folder -- open it to the Terminal. In the command line prompt put this command: `mpirun -n 4 lmp_mpi -in in.crack.lmp`
-11. If this worked correctly, congratulations! Everything is set for the workshop.
+7. If this worked correctly, congratulations! Everything is set for the workshop.
